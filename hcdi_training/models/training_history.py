@@ -85,8 +85,14 @@ class HcdiTrainingHistory(models.Model):
         related='channel_id.passing_grade',
         readonly=True
     )
+    execution_state = fields.Selection([
+        ('draft', 'Draft'),
+        ('in_progress', 'In Progress'),
+        ('done', 'Selesai Pelaksanaan')
+    ], string='Status Pelaksanaan', default='draft', required=True, tracking=True)
+
     state = fields.Selection([
-        ('draft', 'Draft / Mengikuti'),
+        ('draft', 'Mengikuti'),
         ('passed', 'Lulus'),
         ('failed', 'Tidak Lulus')
     ], string='Status Kelulusan', compute='_compute_state', store=True, default='draft', tracking=True)
@@ -106,9 +112,7 @@ class HcdiTrainingHistory(models.Model):
         string='Nama File Sertifikat'
     )
 
-    # ==========================================================================
-    # LOGIKA 1: PERHITUNGAN NILAI AKHIR BERBOBOT
-    # ==========================================================================
+    # 1: PERHITUNGAN NILAI AKHIR BERBOBOT
     @api.depends('score_pretest', 'score_quiz', 'score_posttest', 'channel_id.weight_pretest', 'channel_id.weight_quiz', 'channel_id.weight_posttest')
     def _compute_final_score(self):
         """Menghitung otomatis Nilai Akhir Berbobot berdasarkan persentase bobot pada Course."""
@@ -128,23 +132,43 @@ class HcdiTrainingHistory(models.Model):
             else:
                 rec.final_score = 0.0
 
-    # ==========================================================================
-    # LOGIKA 2: PENENTUAN STATUS KELULUSAN
-    # ==========================================================================
-    @api.depends('final_score', 'passing_grade', 'completion_date')
+    #  2: PENENTUAN STATUS KELULUSAN
+    @api.depends('final_score', 'passing_grade', 'completion_date', 'execution_state')
     def _compute_state(self):
-        """Menentukan status Lulus atau Tidak Lulus secara otomatis."""
+        """Menentukan status Lulus atau Tidak Lulus secara otomatis jika pelaksanaan sudah Done."""
         for rec in self:
-            if not rec.completion_date:
+            if rec.execution_state != 'done':
                 rec.state = 'draft'
             elif rec.final_score >= rec.passing_grade:
                 rec.state = 'passed'
             else:
                 rec.state = 'failed'
 
-    # ==========================================================================
-    # LOGIKA 3: OTOMATISASI PENARIKAN NILAI DARI SURVEY ODOO
-    # ==========================================================================
+    #  WORKFLOW: MULAI & SELESAIKAN TRAINING
+    def action_start_training(self):
+        """Mengubah status pelaksanaan dari Draft menjadi In Progress."""
+        for rec in self:
+            if rec.execution_state != 'draft':
+                raise UserError(_("Pelatihan hanya dapat dimulai dari status Draft!"))
+            rec.execution_state = 'in_progress'
+            rec.message_post(body=_("Pelatihan dimulai (In Progress)."))
+
+    def action_complete_training(self):
+        """Mengubah status pelaksanaan dari In Progress menjadi Done.
+        Dilarang langsung dari Draft ke Done.
+        Saat Done, sistem otomatis menarik nilai survey, mengevaluasi kelulusan, & menerbitkan sertifikat jika Lulus.
+        """
+        for rec in self:
+            if rec.execution_state == 'draft':
+                raise UserError(_("TIDAK BISA LANGSUNG KE DONE!\nBerdasarkan aturan fungsional, status harus diubah menjadi 'In Progress' terlebih dahulu sebelum diselesaikan ('Done')."))
+            elif rec.execution_state != 'in_progress':
+                raise UserError(_("Pelatihan hanya dapat diselesaikan dari status 'In Progress'!"))
+            
+            rec.execution_state = 'done'
+            rec.action_sync_survey_scores()
+            rec.message_post(body=_("Pelatihan diselesaikan (Done). Data otomatis masuk ke Riwayat Training."))
+
+    # 3: OTOMATISASI PENARIKAN NILAI DARI SURVEY ODOO
     def _get_survey_scores(self):
         """Helper method untuk menghitung skor Pre-test, Quiz, dan Post-test dari survey Odoo."""
         self.ensure_one()
@@ -233,9 +257,7 @@ class HcdiTrainingHistory(models.Model):
             if update_vals:
                 rec.write(update_vals)
 
-    # ==========================================================================
-    # LOGIKA 4: PENERBITAN SERTIFIKAT AUTOMATIS PDF & EMAIL
-    # ==========================================================================
+    #  4: PENERBITAN SERTIFIKAT AUTOMATIS PDF & EMAIL
     def action_generate_certificate(self):
         """Method untuk meng-generate nomor sertifikat, PDF, dan mengirim email otomatis."""
         for rec in self:
@@ -275,6 +297,12 @@ class HcdiTrainingHistory(models.Model):
     def create(self, vals_list):
         records = super(HcdiTrainingHistory, self).create(vals_list)
         for rec in records:
+            # Otomatis mendaftarkan partner karyawan sebagai anggota resmi Course eLearning agar bisa mengerjakan ujian di portal
+            if rec.employee_id and rec.channel_id:
+                partner = rec.employee_id.work_contact_id or (rec.employee_id.user_id and rec.employee_id.user_id.partner_id)
+                if partner:
+                    rec.channel_id._action_add_members(partner)
+
             # Otomatis sinkronkan nilai saat record dibuat
             rec.action_sync_survey_scores()
             if rec.state == 'passed' and not rec.certificate_number:
@@ -286,4 +314,39 @@ class HcdiTrainingHistory(models.Model):
         for rec in self:
             if rec.state == 'passed' and not rec.certificate_number:
                 rec.action_generate_certificate()
+        return res
+
+
+class SurveyUserInput(models.Model):
+    _inherit = 'survey.user_input'
+
+    def _mark_done(self):
+        """Otomatis meng-update status pelaksanaan dan nilai pada hcdi.training.history saat survey/ujian selesai."""
+        res = super(SurveyUserInput, self)._mark_done()
+        for user_input in self:
+            if user_input.state == 'done' and user_input.survey_id:
+                slides = self.env['slide.slide'].search([('survey_id', '=', user_input.survey_id.id)])
+                for slide in slides:
+                    partner = user_input.partner_id
+                    email = user_input.email
+                    employee = False
+                    if partner:
+                        employee = self.env['hr.employee'].search(['|', ('work_contact_id', '=', partner.id), ('user_id.partner_id', '=', partner.id)], limit=1)
+                    if not employee and email:
+                        employee = self.env['hr.employee'].search([('work_email', '=', email)], limit=1)
+
+                    if employee:
+                        history = self.env['hcdi.training.history'].search([
+                            ('employee_id', '=', employee.id),
+                            ('channel_id', '=', slide.channel_id.id)
+                        ], limit=1)
+                        if history:
+                            if history.execution_state == 'draft':
+                                history.execution_state = 'in_progress'
+                            history.action_sync_survey_scores()
+                            
+                            survey_name = (user_input.survey_id.title or slide.name or '').lower()
+                            if 'post' in survey_name:
+                                history.execution_state = 'done'
+                                history.action_sync_survey_scores()
         return res

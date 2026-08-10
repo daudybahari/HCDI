@@ -9,7 +9,6 @@
                 <field name="name"/>
                 <field name="manager_id"/>
                 <field name="department_id"/>
-                <field name="priority" widget="priority"/>
                 <field name="estimated_date"/>
                 <field name="trainer_id"/>
                 <field name="approval_state" widget="badge"
@@ -54,7 +53,6 @@
                         <group string="1. Informasi Pengajuan">
                             <field name="manager_id"/>
                             <field name="department_id"/>
-                            <field name="priority" widget="priority"/>
                             <field name="estimated_date"/>
                         </group>
                         <group string="2. Workflow Approval HR L&amp;D">

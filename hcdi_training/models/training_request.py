@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-# ==============================================================================
-# FEATURE: SPR0-01 — Integrasi Document Approval (Pengajuan Training)
-# Catatan: Kode ini dapat dihapus/di-revert secara mandiri jika diminta oleh user.
-# ==============================================================================
-
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
@@ -122,14 +116,40 @@ class HcdiTrainingRequest(models.Model):
             if not rec.trainer_id:
                 raise UserError(_("Silakan tentukan 'Trainer Pelatihan' terlebih dahulu sebelum membuat Course eLearning!"))
 
-            # Buat Course pada modul eLearning (slide.channel) dengan Trainer yang ditunjuk oleh HR
+            # 1. Buat Course pada modul eLearning (slide.channel) dengan Trainer yang ditunjuk oleh HR
             new_course = self.env['slide.channel'].create({
                 'name': rec.name,
                 'description': rec.reason,
                 'user_id': rec.trainer_id.id, # Otomatis menjadi "Responsible" di tampilan Course!
             })
             rec.course_id = new_course.id
-            rec.message_post(body=_("Course eLearning '%s' berhasil dibuat dengan Trainer Responsible: %s.") % (new_course.name, rec.trainer_id.name))
+
+            # 2. Otomatis mendaftarkan akun Partner seluruh Calon Peserta ke daftar Anggota Resmi Course eLearning (slide.channel.partner)
+            # PENJELASAN KODE: Tanpa logika ini, Odoo akan mengunci materi & ujian dari peserta karena menganggap mereka "Belum Terdaftar (Not Enrolled)".
+            # Dengan _action_add_members(), seluruh Calon Peserta otomatis bisa membuka & mengerjakan soal ujian di portal Odoo.
+            participant_partners = rec.target_participant_ids.mapped(
+                lambda emp: emp.work_contact_id or (emp.user_id and emp.user_id.partner_id)
+            ).filtered(lambda p: p)
+            if participant_partners:
+                new_course._action_add_members(participant_partners)
+
+            # 3. Otomatis mendaftarkan seluruh Calon Peserta ke Progres Training (hcdi.training.history) dengan status 'draft'
+            history_obj = self.env['hcdi.training.history']
+            created_count = 0
+            for participant in rec.target_participant_ids:
+                existing = history_obj.search([
+                    ('employee_id', '=', participant.id),
+                    ('channel_id', '=', new_course.id)
+                ], limit=1)
+                if not existing:
+                    history_obj.create({
+                        'employee_id': participant.id,
+                        'channel_id': new_course.id,
+                        'execution_state': 'draft',
+                    })
+                    created_count += 1
+
+            rec.message_post(body=_("Course eLearning '%s' berhasil dibuat dengan Trainer Responsible: %s. %d peserta otomatis terdaftar sebagai Anggota Course & Progres Training.") % (new_course.name, rec.trainer_id.name, created_count))
 
             return {
                 'name': _('Course eLearning'),
