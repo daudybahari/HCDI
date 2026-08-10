@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- provinsi Views & Action -->
+        <record id="provinsi_view_list" model="ir.ui.view">
+            <field name="name">provinsi.view.list</field>
+            <field name="model">provinsi</field>
+            <field name="arch" type="xml">
+                <list>
+                    <field name="kode"/>
+                    <field name="name"/>
+                    <field name="singkatan"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="provinsi_view_form" model="ir.ui.view">
+            <field name="name">provinsi.view.form</field>
+            <field name="model">provinsi</field>
+            <field name="arch" type="xml">
+                <form string="provins">
+                    <sheet>
+                        <group>
+                            <field name="kode"/>
+                            <field name="name"/>
+                            <field name="singkatan"/>
+                            <field name="description"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="provinsi_action" model="ir.actions.act_window">
+            <field name="name">Provinsi</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">provinsi</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="oe_view_nocontent_create">
+                    Klik untuk membuat data Provinsi baru.
+                </p>
+            </field>
+        </record>
+
+
+        <!-- Kota Views & Action -->
+        <record id="kota_view_list" model="ir.ui.view">
+            <field name="name">kota.view.list</field>
+            <field name="model">kota</field>
+            <field name="arch" type="xml">
+                <list>
+                    <field name="kode"/>
+                    <field name="name"/>
+                    <field name="provinsi_id"/>
+                    <field name="singkatan"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="kota_view_form" model="ir.ui.view">
+            <field name="name">kota.view.form</field>
+            <field name="model">kota</field>
+            <field name="arch" type="xml">
+                <form string="Kota/Kabupaten">
+                    <sheet>
+                        <group>
+                            <field name="kode"/>
+                            <field name="name"/>
+                            <field name="provinsi_id"/>
+                            <field name="singkatan"/>
+                            <field name="description"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="kota_action" model="ir.actions.act_window">
+            <field name="name">Kota/Kabupaten</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">kota</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="oe_view_nocontent_create">
+                    Klik untuk membuat data Kota/Kabupaten baru.
+                </p>
+            </field>
+        </record>
+
+
+        <!-- Kecamatan Views & Action -->
+        <record id="kecamatan_view_list" model="ir.ui.view">
+            <field name="name">kecamatan.view.list</field>
+            <field name="model">kecamatan</field>
+            <field name="arch" type="xml">
+                <list>
+                    <field name="kode"/>
+                    <field name="name"/>
+                    <field name="kota_id"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="kecamatan_view_form" model="ir.ui.view">
+            <field name="name">kecamatan.view.form</field>
+            <field name="model">kecamatan</field>
+            <field name="arch" type="xml">
+                <form string="Kecamatan">
+                    <sheet>
+                        <group>
+                            <field name="kode"/>
+                            <field name="name"/>
+                            <field name="kota_id"/>
+                            <field name="description"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="kecamatan_action" model="ir.actions.act_window">
+            <field name="name">Kecamatan</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">kecamatan</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="oe_view_nocontent_create">
+                    Klik untuk membuat data Kecamatan baru.
+                </p>
+            </field>
+        </record>
+
+
+        <!-- Desa Views & Action -->
+        <record id="desa_view_list" model="ir.ui.view">
+            <field name="name">desa.view.list</field>
+            <field name="model">desa</field>
+            <field name="arch" type="xml">
+                <list>
+                    <field name="kode"/>
+                    <field name="name"/>
+                    <field name="kecamatan_id"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="desa_view_form" model="ir.ui.view">
+            <field name="name">desa.view.form</field>
+            <field name="model">desa</field>
+            <field name="arch" type="xml">
+                <form string="Desa/Kelurahan">
+                    <sheet>
+                        <group>
+                            <field name="kode"/>
+                            <field name="name"/>
+                            <field name="kecamatan_id"/>
+                            <field name="description"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="desa_action" model="ir.actions.act_window">
+            <field name="name">Desa/Kelurahan</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">desa</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="oe_view_nocontent_create">
+                    Klik untuk membuat data Desa/Kelurahan baru.
+                </p>
+            </field>
+        </record>
+
+
+        <!-- Menu Items under Pengaturan (setting_menu_categ) -->
+        <menuitem id="provinsi_menu_act" name="Provinsi" parent="setting_menu" action="provinsi_action" sequence="30"/>
+        <menuitem id="kota_menu_act" name="Kota/Kabupaten" parent="setting_menu" action="kota_action" sequence="40"/>
+        <menuitem id="kecamatan_menu_act" name="Kecamatan" parent="setting_menu" action="kecamatan_action" sequence="50"/>
+        <menuitem id="desa_menu_act" name="Desa/Kelurahan" parent="setting_menu" action="desa_action" sequence="60"/>
+
+    </data>
+</odoo>

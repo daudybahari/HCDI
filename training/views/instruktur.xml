@@ -1,0 +1,61 @@
+<?xml version='1.0' encoding='utf-8'?>
+<odoo>
+    <data>
+        <!-- instruktur list view -->
+        <record id="instruktur_view_list" model="ir.ui.view">
+            <field name="name">instruktur.view.list</field>
+            <field name="model">instruktur</field>
+            <field name="arch" type="xml">
+                <list>
+                    <field name="name"/>
+                    <field name="street"/>
+                    <field name="mobile"/>
+                    <field name="email"/>
+                    <field name="keahlian_ids"/>
+                </list>
+            </field>
+        </record>
+              <!-- instruktur form view -->
+        <record id="instruktur_view_form" model="ir.ui.view">
+            <field name="name">instruktur.view.form</field>
+            <field name="model">instruktur</field>
+            <field name="arch" type="xml">
+                <form string="">
+                    <sheet>
+                        <group>
+                            <group>
+                                <field name="name"/>
+                                <field name="jenis_kelamin"/>
+                                <field name="mobile"/>
+                                <field name="email"/>
+                                <field name="keahlian_ids" widget="many2many_tags"/>
+                            </group>
+                            <group>
+                                <field name="street"/>
+                                <field name="provinsi_id"/>
+                                <field name="kota_id" domain="[('provinsi_id','=',provinsi_id)]"/>
+                                <field name="kecamatan_id" domain="[('kota_id','=',kota_id)]"/>
+                                <field name="desa_id" domain="[('kecamatan_id','=',kecamatan_id)]"/>
+                            </group>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+        <!-- instruktur action window -->
+        <record id="instruktur_action" model="ir.actions.act_window">
+            <field name="name">Instruktur Training</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">instruktur</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="oe_view_nocontent_create">
+                    <!-- Add Text Here -->
+                </p><p>
+                </p>
+            </field>
+        </record>
+        <!-- This Menu Item must have a parent and an action -->
+        <menuitem id="instruktur_menu_act" name="Instruktur" parent="setting_menu" action="instruktur_action" sequence="10"/>
+    </data>
+</odoo>
