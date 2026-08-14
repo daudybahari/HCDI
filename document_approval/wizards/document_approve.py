@@ -38,6 +38,9 @@ class DocumentApprove(models.TransientModel):
         """ function to approve document"""
         if self.document_id.team_id.team_lead_id.id == self.env.uid:
             self.document_id.state = "approved"
+            self.document_id.step_ids.filtered(lambda s: s.current_state in ('pending', 'upcoming')).write({
+                'current_state': 'approved',
+            })
         else:
             if self.env.uid in self.document_id.approver_ids.ids:
                 self.document_id.approval_ids.write({

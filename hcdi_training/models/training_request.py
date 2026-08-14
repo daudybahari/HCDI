@@ -8,75 +8,118 @@ class HcdiTrainingRequest(models.Model):
     _order = 'id desc'
 
     name = fields.Char(
-        string='Judul Pengajuan Training',
+        string='Training Request Title',
         required=True,
         tracking=True,
-        placeholder='Contoh: Pengajuan Training Data Analytics & Python'
+        placeholder='e.g. Data Analytics & Python Training Request'
     )
     manager_id = fields.Many2one(
         'res.users',
-        string='Manager Pengaju',
+        string='Requesting Manager',
         default=lambda self: self.env.user,
         required=True,
         tracking=True
     )
     trainer_id = fields.Many2one(
         'res.users',
-        string='Trainer Pelatihan',
+        string='Trainer',
         tracking=True,
-        help='Trainer / Instruktur yang ditunjuk oleh HR L&D setelah pengajuan disetujui. Akun ini akan menjadi Responsible pada Course eLearning.'
+        help='Trainer appointed by HR L&D after approval. This user will be set as Responsible on the eLearning Course.'
     )
     department_id = fields.Many2one(
         'hr.department',
-        string='Divisi / Departemen',
+        string='Department',
         required=True,
         tracking=True
     )
     reason = fields.Text(
-        string='Alasan / Kebutuhan Pelatihan',
+        string='Training Needs & Rationale (TNA)',
         required=True,
-        help='Deskripsi kebutuhan TNA atau proyek mendesak'
+        help='Description of training needs or urgent project rationale'
     )
     priority = fields.Selection([
-        ('0', 'Rendah'),
-        ('1', 'Sedang'),
-        ('2', 'Tinggi / Mendesak')
-    ], string='Prioritas Pelaksanaan', default='1', tracking=True)
+        ('0', 'Low'),
+        ('1', 'Medium'),
+        ('2', 'High / Urgent')
+    ], string='Priority', default='1', tracking=True)
 
     estimated_date = fields.Date(
-        string='Estimasi Jadwal Pelaksanaan'
+        string='Estimated Training Date'
     )
     target_participant_ids = fields.Many2many(
         'hr.employee',
-        string='Calon Peserta Training'
+        string='Training Participants'
+    )
+    attachment_ids = fields.Many2many(
+        'ir.attachment',
+        'hcdi_training_request_attachment_rel',
+        'request_id',
+        'attachment_id',
+        string='File Attachment',
+        help='Upload supporting documents or proof files'
     )
 
     # Integrasi dengan Modul Document Approval (Cybrosys)
     approval_team_id = fields.Many2one(
         'document.approval.team',
-        string='Tim Approval HR L&D',
-        help='Pilih Tim Approval HR yang akan memberikan persetujuan'
+        string='Approval Team',
+        help='Select HR Approval Team'
     )
     approval_id = fields.Many2one(
         'document.approval',
-        string='Dokumen Approval (Cybrosys)',
+        string='Document Approval',
         readonly=True,
         copy=False
     )
     approval_state = fields.Selection([
         ('draft', 'Draft'),
-        ('waiting', 'Menunggu Approval HR'),
-        ('approved', 'Approved (Disetujui)'),
-        ('reject', 'Rejected (Ditolak)')
-    ], string='Status Approval', related='approval_id.state', store=True, readonly=True, default='draft', tracking=True)
+        ('waiting', 'Waiting HR Approval'),
+        ('approved', 'Approved'),
+        ('reject', 'Rejected')
+    ], string='Approval Status', related='approval_id.state', store=True, readonly=True, default='draft', tracking=True)
 
     # Relasi ke Course eLearning yang dihasilkan
     course_id = fields.Many2one(
         'slide.channel',
-        string='Course eLearning Terbuat',
+        string='eLearning Course',
         readonly=True,
         copy=False
     )
+
+    # Proxy Fields & Actions untuk Integrasi Full Workflow Approval Cybrosys di HCDI Form
+    show_approve = fields.Boolean(
+        string='Bisa Approve/Reject',
+        compute='_compute_show_approve'
+    )
+    approval_step_ids = fields.One2many(
+        related='approval_id.step_ids',
+        string='Tahapan Approval Cybrosys',
+        readonly=True
+    )
+
+    @api.depends('approval_id', 'approval_id.show_approve', 'approval_id.state')
+    def _compute_show_approve(self):
+        """Mengecek apakah user yang sedang login adalah approver / team lead sah untuk dokumen approval Cybrosys ini."""
+        for rec in self:
+            if rec.approval_id and rec.approval_state == 'waiting':
+                rec.approval_id._compute_show_approve()
+                rec.show_approve = rec.approval_id.show_approve
+            else:
+                rec.show_approve = False
+
+    def action_approve_request(self):
+        """Memanggil wizard Setujui (Approve) bawaan Cybrosys document.approval."""
+        self.ensure_one()
+        if not self.approval_id:
+            raise UserError(_("Dokumen approval belum dibuat!"))
+        return self.approval_id.action_approve()
+
+    def action_reject_request(self):
+        """Memanggil wizard Tolak (Reject) bawaan Cybrosys document.approval."""
+        self.ensure_one()
+        if not self.approval_id:
+            raise UserError(_("Dokumen approval belum dibuat!"))
+        return self.approval_id.action_reject()
 
     def action_submit_for_approval(self):
         """Membuat record Document Approval Cybrosys dan mengirimkan pengajuan ke workflow approval."""
@@ -92,6 +135,15 @@ class HcdiTrainingRequest(models.Model):
                     'approve_initiator_id': rec.create_uid.id or self.env.uid,
                 })
                 rec.approval_id = doc_approval.id
+
+                # Copy file attachment pendukung dari Pengajuan ke Dokumen Approval Cybrosys
+                if rec.attachment_ids:
+                    for att in rec.attachment_ids:
+                        self.env['document.approval.file'].create({
+                            'approval_id': doc_approval.id,
+                            'name': att.name,
+                            'file': att.datas,
+                        })
             
             # Kirim dokumen approval ke status waiting
             rec.approval_id.action_send_for_approval()
@@ -158,3 +210,4 @@ class HcdiTrainingRequest(models.Model):
                 'res_id': new_course.id,
                 'view_mode': 'form',
             }
+
